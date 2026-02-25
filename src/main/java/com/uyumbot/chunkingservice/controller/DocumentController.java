@@ -4,6 +4,7 @@ import com.uyumbot.chunkingservice.dto.ChunkSummary;
 import com.uyumbot.chunkingservice.dto.DocumentRequest;
 import com.uyumbot.chunkingservice.dto.DocumentResponse;
 import com.uyumbot.chunkingservice.service.DocumentService;
+import com.uyumbot.chunkingservice.service.FileParsingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -11,8 +12,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -28,6 +31,7 @@ import java.util.UUID;
  * PUT    /api/documents/{id}         - update document (+ optional re-chunk)
  * DELETE /api/documents/{id}         - delete document and its chunks
  * POST   /api/documents/{id}/chunk   - trigger chunking with provided structure
+ * POST   /api/documents/upload       - upload file, parse and auto-chunk
  * </pre>
  */
 @Tag(name = "Documents", description = "Document CRUD and chunking operations")
@@ -36,9 +40,11 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final FileParsingService fileParsingService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, FileParsingService fileParsingService) {
         this.documentService = documentService;
+        this.fileParsingService = fileParsingService;
     }
 
     @Operation(summary = "List all documents")
@@ -104,5 +110,25 @@ public class DocumentController {
             @Parameter(description = "Document UUID") @PathVariable UUID id,
             @RequestBody Map<String, Object> structure) {
         return ResponseEntity.ok(documentService.chunkDocument(id, structure));
+    }
+
+    @Operation(summary = "Upload and parse a document file",
+            description = "Accepts a multipart file (docx, pdf, pptx, xlsx), parses it and auto-chunks its content")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Document uploaded, parsed and chunked"),
+            @ApiResponse(responseCode = "400", description = "Unsupported file type or parse error")
+    })
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentResponse> uploadDocument(
+            @Parameter(description = "File to upload (docx, pdf, pptx, xlsx)")
+            @RequestParam("file") MultipartFile file) {
+        String format = fileParsingService.detectFormat(file);
+        Map<String, Object> structure = fileParsingService.parse(file);
+        DocumentRequest request = DocumentRequest.builder()
+                .filename(file.getOriginalFilename())
+                .format(format)
+                .structure(structure)
+                .build();
+        return ResponseEntity.status(HttpStatus.CREATED).body(documentService.createDocument(request));
     }
 }
