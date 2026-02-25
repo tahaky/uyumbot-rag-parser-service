@@ -3,11 +3,17 @@
 # -----------------------------------------------------------------------------
 FROM maven:3.9.9-eclipse-temurin-21 AS maven_build
 
+# Set Maven options for TLS compatibility and retry on transient network failures
+ENV MAVEN_OPTS="-Dhttps.protocols=TLSv1.2,TLSv1.3 -Dmaven.wagon.http.retryHandler.count=3"
+
 # Set working directory
 WORKDIR /build
 
 # Copy Maven dependency files first (for better caching)
 COPY pom.xml .
+
+# Download all dependencies in a separate layer so they are cached by Docker
+RUN mvn dependency:go-offline -B
 
 # Copy source code
 COPY src ./src
