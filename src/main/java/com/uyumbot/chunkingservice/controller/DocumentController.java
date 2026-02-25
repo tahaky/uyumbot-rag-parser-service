@@ -4,6 +4,11 @@ import com.uyumbot.chunkingservice.dto.ChunkSummary;
 import com.uyumbot.chunkingservice.dto.DocumentRequest;
 import com.uyumbot.chunkingservice.dto.DocumentResponse;
 import com.uyumbot.chunkingservice.service.DocumentService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +30,7 @@ import java.util.UUID;
  * POST   /api/documents/{id}/chunk   - trigger chunking with provided structure
  * </pre>
  */
+@Tag(name = "Documents", description = "Document CRUD and chunking operations")
 @RestController
 @RequestMapping("/api/documents")
 public class DocumentController {
@@ -35,41 +41,67 @@ public class DocumentController {
         this.documentService = documentService;
     }
 
+    @Operation(summary = "List all documents")
     @GetMapping
     public ResponseEntity<List<DocumentResponse>> listDocuments() {
         return ResponseEntity.ok(documentService.listDocuments());
     }
 
+    @Operation(summary = "Create a new document", description = "Creates a document and optionally auto-chunks its content")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Document created"),
+            @ApiResponse(responseCode = "400", description = "Invalid request body")
+    })
     @PostMapping
     public ResponseEntity<DocumentResponse> createDocument(@Valid @RequestBody DocumentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(documentService.createDocument(request));
     }
 
+    @Operation(summary = "Get a document by ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document found"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
+    })
     @GetMapping("/{id}")
-    public ResponseEntity<DocumentResponse> getDocument(@PathVariable UUID id) {
+    public ResponseEntity<DocumentResponse> getDocument(
+            @Parameter(description = "Document UUID") @PathVariable UUID id) {
         return ResponseEntity.ok(documentService.getDocument(id));
     }
 
+    @Operation(summary = "Update a document", description = "Updates document metadata and optionally re-chunks its content")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document updated"),
+            @ApiResponse(responseCode = "404", description = "Document not found"),
+            @ApiResponse(responseCode = "400", description = "Invalid request body")
+    })
     @PutMapping("/{id}")
     public ResponseEntity<DocumentResponse> updateDocument(
-            @PathVariable UUID id,
+            @Parameter(description = "Document UUID") @PathVariable UUID id,
             @Valid @RequestBody DocumentRequest request) {
         return ResponseEntity.ok(documentService.updateDocument(id, request));
     }
 
+    @Operation(summary = "Delete a document and its chunks")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Document deleted"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
+    })
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteDocument(@PathVariable UUID id) {
+    public ResponseEntity<Void> deleteDocument(
+            @Parameter(description = "Document UUID") @PathVariable UUID id) {
         documentService.deleteDocument(id);
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Trigger (re-)chunking for a document.
-     * The request body is a format-specific parsed structure map.
-     */
+    @Operation(summary = "Trigger chunking for a document",
+            description = "Triggers (re-)chunking for a document using the provided format-specific parsed structure map")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Chunking completed"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
+    })
     @PostMapping("/{id}/chunk")
     public ResponseEntity<ChunkSummary> chunkDocument(
-            @PathVariable UUID id,
+            @Parameter(description = "Document UUID") @PathVariable UUID id,
             @RequestBody Map<String, Object> structure) {
         return ResponseEntity.ok(documentService.chunkDocument(id, structure));
     }
